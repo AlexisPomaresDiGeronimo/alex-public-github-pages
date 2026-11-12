@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎄</text></svg>">
+<title>Σε περιμένω</title>
+<style>
+:root{
+  --bg:#0f2a24;--bg2:#17382f;--ink:#f7efe2;--muted:#c9d6c8;--gold:#e8b960;--berry:#c8344b;--card:#1d4036;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f2a24;--bg2:#17382f;--ink:#f7efe2;--muted:#c9d6c8;--gold:#e8b960;--card:#1d4036}}
+:root[data-theme="dark"]{--bg:#0f2a24;--bg2:#17382f;--ink:#f7efe2;--muted:#c9d6c8;--gold:#e8b960;--card:#1d4036}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(ellipse at top,var(--bg2),var(--bg) 70%);color:var(--ink);
+  font-family:Georgia,"Times New Roman",serif;display:flex;justify-content:center;overflow-x:hidden}
+#snow{position:fixed;inset:0;pointer-events:none;z-index:0}
+main{position:relative;z-index:1;width:100%;max-width:720px;padding:48px 22px 56px;text-align:center}
+.santa{display:none;font-size:56px;line-height:1;margin-bottom:12px}
+.tree{font-size:56px;line-height:1;margin-bottom:12px}
+h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 10px;color:var(--gold);letter-spacing:.01em}
+#h1-after{display:none;font-size:clamp(28px,7vw,44px);color:var(--gold);font-style:italic;margin:10px 0 30px}
+.sub{color:var(--muted);font-size:clamp(16px,3.6vw,19px);line-height:1.6;margin:0 auto 34px;max-width:46ch}
+.count{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:0 auto 14px}
+.unit{background:var(--card);border:1px solid rgba(232,185,96,.35);border-radius:14px;padding:16px 4px}
+.unit b{display:block;font-size:clamp(28px,9vw,52px);font-weight:400;font-variant-numeric:tabular-nums;color:var(--ink)}
+.unit span{font-size:13px;color:var(--muted)}
+.when{color:var(--muted);font-size:15px;margin:0 0 40px}
+.letter{background:var(--card);border-radius:6px;padding:26px 24px;text-align:left;line-height:1.75;font-size:clamp(16px,3.8vw,19px)}
+.letter p{margin:0 0 14px}
+.letter p:last-child{margin:0;color:var(--gold);font-style:italic}
+.done{display:none;font-size:clamp(28px,7vw,44px);color:var(--ink);font-style:italic;margin:10px 0 30px}
+@media (prefers-reduced-motion:reduce){#snow{display:none}}
+</style>
+</head>
+<body>
+<canvas id="snow" aria-hidden="true"></canvas>
+<main>
+  <div class="santa" id="santa" aria-hidden="true">🎅</div>
+  <div class="tree" id="tree" aria-hidden="true">🎄</div>
+  <h1 id="h1-before">Until Christmas!!!</h1>
+  <h1 id="h1-after">Ho ho ho! <br> Merry Christmas!!!</h1>
+  <p class="sub" id="sub">Κάθε δευτερόλεπτο από αυτό το ρολόι είναι ένα δευτερόλεπτο πιο κοντά στο να σε αγκαλιάσω ξανά.</p>
+
+  <div id="clock" class="count" role="timer" aria-live="off">
+    <div class="unit"><b id="d">0</b><span>μέρες</span></div>
+    <div class="unit"><b id="h">0</b><span>ώρες</span></div>
+    <div class="unit"><b id="m">0</b><span>λεπτά</span></div>
+    <div class="unit"><b id="s">0</b><span>δευτερόλεπτα</span></div>
+  </div>
+  <p class="when" id="when">μέχρι τις 18 Δεκεμβρίου, 17:55 το απόγευμα</p>
+  <div class="done" id="done">Είμαι εδώ. Έλα στην αγκαλιά μου. ❤️</div>
+
+  <section class="letter" id="letter">
+    <p>Σουσουρίδι μου,</p>
+    <p>Λυπάμαι πολύ που δεν μπορώ να είμαι δίπλα σου πριν από τα Χριστούγεννα. Η δουλειά με κρατάει μακριά σου και μισώ κάθε λεπτό.</p>
+    <p>Να ξέρεις ότι σε περιμένω. Σε σκέφτομαι κάθε μέρα και μετράω κάθε ώρα μέχρι τις 18 Δεκεμβρίου, που επιτέλους θα σε δω.</p>
+    <p>Σ’ αγαπάω. ❤️</p>
+    <p>Ο Ζουζούνος σου.</p>
+  </section>
+</main>
+
+<script>
+(function(){
+  function target(){
+    var now=new Date(), y=now.getFullYear();
+    var t=new Date(y,11,18,17,55,0);
+    
+    return t;
+  }
+  var T=target();
+  function tick(){
+    var diff=T-new Date();
+    if(diff<=0){
+      document.getElementById('tree').style.display='none';
+      document.getElementById('h1-before').style.display='none';
+      document.getElementById('sub').style.display='none';
+      document.getElementById('clock').style.display='none';
+      document.getElementById('when').style.display='none';
+      document.getElementById('letter').style.display='none';
+
+      document.getElementById('santa').style.display='block';
+      document.getElementById('h1-after').style.display='block';
+      document.getElementById('done').style.display='block';
+      return;
+    }
+    var s=Math.floor(diff/1000);
+    document.getElementById('d').textContent=Math.floor(s/86400);
+    document.getElementById('h').textContent=Math.floor(s%86400/3600);
+    document.getElementById('m').textContent=Math.floor(s%3600/60);
+    document.getElementById('s').textContent=s%60;
+  }
+  tick(); setInterval(tick,1000);
+
+  var c=document.getElementById('snow'),x=c.getContext('2d'),f=[],W,H;
+  function size(){W=c.width=innerWidth;H=c.height=innerHeight}
+  size(); addEventListener('resize',size);
+  for(var i=0;i<70;i++) f.push({x:Math.random()*2000,y:Math.random()*1200,r:Math.random()*2.5+.8,v:Math.random()*.8+.3,d:Math.random()*Math.PI*2});
+  function draw(){
+    x.clearRect(0,0,W,H);x.fillStyle='rgba(255,255,255,.8)';
+    f.forEach(function(p){
+      p.y+=p.v;p.d+=.01;p.x+=Math.sin(p.d)*.4;
+      if(p.y>H){p.y=-5;p.x=Math.random()*W}
+      x.beginPath();x.arc(p.x%W,p.y,p.r,0,6.283);x.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+</body>
+</html>

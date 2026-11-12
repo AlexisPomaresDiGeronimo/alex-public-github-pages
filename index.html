@@ -33,6 +33,23 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
 .letter p{margin:0 0 14px}
 .letter p:last-child{margin:0;color:var(--gold);font-style:italic}
 .done{display:none;font-size:clamp(28px,7vw,44px);color:var(--ink);font-style:italic;margin:10px 0 30px}
+.wish-title{font-weight:400;font-style:italic;font-size:clamp(26px,6vw,36px);color:var(--gold);margin:52px 0 6px}
+.wish-note{color:var(--muted);font-size:15px;margin:0 0 22px}
+.lists{display:grid;grid-template-columns:1fr;gap:18px;text-align:left}
+@media (min-width:640px){.lists{grid-template-columns:1fr 1fr}}
+.list{background:var(--card);border:1px solid rgba(232,185,96,.35);border-radius:14px;padding:20px 18px}
+.list h3{margin:0 0 4px;font-weight:400;font-size:22px;color:var(--ink)}
+.list .cnt{color:var(--muted);font-size:14px;margin:0 0 14px}
+.list ul{list-style:none;margin:0 0 14px;padding:0}
+.list li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid rgba(247,239,226,.12);line-height:1.4;overflow-wrap:anywhere}
+.list li.empty{color:var(--muted);font-style:italic;border-bottom:0}
+.list li button{flex:none;background:none;border:0;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:4px 8px;border-radius:8px}
+.list li button:hover{color:var(--berry)}
+.add{display:flex;gap:8px}
+.add input{flex:1;min-width:0;background:var(--bg);color:var(--ink);border:1px solid rgba(232,185,96,.35);border-radius:10px;padding:10px 12px;font:inherit;font-size:16px}
+.add input:disabled{opacity:.5}
+.add button{background:var(--gold);color:#2a1d05;border:0;border-radius:10px;padding:10px 14px;font:inherit;font-size:16px;cursor:pointer}
+.add button:disabled{opacity:.5;cursor:default}
 @media (prefers-reduced-motion:reduce){#snow{display:none}}
 </style>
 </head>
@@ -61,6 +78,10 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
     <p>Σ’ αγαπάω. ❤️</p>
     <p>Ο Ζουζούνος σου.</p>
   </section>
+
+  <h2 class="wish-title">Οι λίστες των δώρων μας 🎁</h2>
+  <p class="wish-note">Μέχρι 10 δώρα ο καθένας. Πρόσθεσε ή σβήσε όποτε θέλεις.</p>
+  <section class="lists" id="lists"></section>
 </main>
 
 <script>
@@ -109,6 +130,82 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
     requestAnimationFrame(draw);
   }
   draw();
+})();
+
+/* Wish lists */
+(function(){
+  var MAX=10, db=null;
+  var people=[{id:'danai',name:'Δανάη'},{id:'alexis',name:'Άλεξης'}];
+  var items={danai:[],alexis:[]}, els={}, chain={danai:Promise.resolve(),alexis:Promise.resolve()};
+
+  function lsGet(id){try{var v=JSON.parse(localStorage.getItem('wish_'+id)||'[]');return Array.isArray(v)?v:[]}catch(e){return[]}}
+  function lsSet(id){try{localStorage.setItem('wish_'+id,JSON.stringify(items[id]))}catch(e){}}
+
+  function build(){
+    var root=document.getElementById('lists');
+    people.forEach(function(p){
+      var box=document.createElement('div');box.className='list';
+      var h=document.createElement('h3');h.textContent='Η λίστα '+(p.id==='danai'?'της ':'του ')+p.name;
+      var cnt=document.createElement('p');cnt.className='cnt';
+      var ul=document.createElement('ul');
+      var row=document.createElement('div');row.className='add';
+      var inp=document.createElement('input');inp.type='text';inp.maxLength=80;inp.placeholder='Ένα δώρο…';inp.setAttribute('aria-label','Νέο δώρο για '+p.name);
+      var btn=document.createElement('button');btn.type='button';btn.textContent='Προσθήκη';
+      row.appendChild(inp);row.appendChild(btn);
+      box.appendChild(h);box.appendChild(cnt);box.appendChild(ul);box.appendChild(row);
+      root.appendChild(box);
+      els[p.id]={cnt:cnt,ul:ul,inp:inp,btn:btn};
+      function add(){
+        var v=inp.value.trim();
+        if(!v||items[p.id].length>=MAX)return;
+        items[p.id].push(v);inp.value='';save(p.id);render(p.id);
+      }
+      btn.addEventListener('click',add);
+      inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();add()}});
+    });
+  }
+
+  function render(id){
+    var e=els[id],list=items[id],full=list.length>=MAX;
+    e.cnt.textContent=list.length+' / '+MAX+' δώρα';
+    e.ul.textContent='';
+    if(!list.length){var li=document.createElement('li');li.className='empty';li.textContent='Δεν υπάρχουν δώρα ακόμα.';e.ul.appendChild(li)}
+    list.forEach(function(t,i){
+      var li=document.createElement('li');
+      var s=document.createElement('span');s.textContent=t;
+      var b=document.createElement('button');b.type='button';b.textContent='×';b.setAttribute('aria-label','Αφαίρεση: '+t);
+      b.addEventListener('click',function(){items[id].splice(i,1);save(id);render(id)});
+      li.appendChild(s);li.appendChild(b);e.ul.appendChild(li);
+    });
+    e.inp.disabled=full;e.btn.disabled=full;
+    e.inp.placeholder=full?'Η λίστα είναι γεμάτη':'Ένα δώρο…';
+  }
+
+  function save(id){
+    lsSet(id);
+    if(!db)return;
+    var snapshot=items[id].slice();
+    chain[id]=chain[id].then(function(){return db.doc('wishlist/'+id).set({items:snapshot})}).catch(function(){});
+  }
+
+  build();
+  people.forEach(function(p){items[p.id]=lsGet(p.id).slice(0,MAX);render(p.id)});
+
+  try{
+    if(window.claude&&claude.use){
+      claude.use('db').then(function(d){
+        if(!d)return;
+        db=d;
+        people.forEach(function(p){
+          db.doc('wishlist/'+p.id).onSnapshot(function(snap){
+            if(!snap.exists)return;
+            var v=snap.data()&&snap.data().items;
+            if(Array.isArray(v)){items[p.id]=v.filter(function(t){return typeof t==='string'}).slice(0,MAX);lsSet(p.id);render(p.id)}
+          },function(){});
+        });
+      }).catch(function(){});
+    }
+  }catch(e){}
 })();
 </script>
 </body>
