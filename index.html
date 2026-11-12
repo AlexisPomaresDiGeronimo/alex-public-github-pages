@@ -45,11 +45,14 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
 .list li.empty{color:var(--muted);font-style:italic;border-bottom:0}
 .list li button{flex:none;background:none;border:0;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:4px 8px;border-radius:8px}
 .list li button:hover{color:var(--berry)}
-.add{display:flex;gap:8px}
+.add{display:flex;flex-wrap:wrap;gap:8px}
 .add input{flex:1;min-width:0;background:var(--bg);color:var(--ink);border:1px solid rgba(232,185,96,.35);border-radius:10px;padding:10px 12px;font:inherit;font-size:16px}
 .add input:disabled{opacity:.5}
 .add button{background:var(--gold);color:#2a1d05;border:0;border-radius:10px;padding:10px 14px;font:inherit;font-size:16px;cursor:pointer}
 .add button:disabled{opacity:.5;cursor:default}
+.add input.lnk{flex:1 0 100%;font-size:14px}
+.list li .it{display:flex;flex-direction:column;gap:2px;min-width:0}
+.list li .it a{color:var(--gold);font-size:14px;overflow-wrap:anywhere}
 @media (prefers-reduced-motion:reduce){#snow{display:none}}
 </style>
 </head>
@@ -138,8 +141,11 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
   var people=[{id:'danai',name:'Δανάη'},{id:'alexis',name:'Άλεξης'}];
   var items={danai:[],alexis:[]}, els={}, chain={danai:Promise.resolve(),alexis:Promise.resolve()};
 
-  function lsGet(id){try{var v=JSON.parse(localStorage.getItem('wish_'+id)||'[]');return Array.isArray(v)?v:[]}catch(e){return[]}}
+  function lsGet(id){try{var v=JSON.parse(localStorage.getItem('wish_'+id)||'[]');return norm(v)}catch(e){return[]}}
   function lsSet(id){try{localStorage.setItem('wish_'+id,JSON.stringify(items[id]))}catch(e){}}
+
+  function cleanUrl(u){u=String(u||'').trim();if(!u)return'';if(!/^https?:\/\//i.test(u))u='https://'+u;try{var p=new URL(u);return /^https?:$/.test(p.protocol)?p.href:''}catch(e){return''}}
+  function norm(v){return Array.isArray(v)?v.map(function(i){if(typeof i==='string')return{t:i,u:''};if(i&&typeof i.t==='string')return{t:i.t,u:cleanUrl(i.u||'')};return null}).filter(Boolean):[]}
 
   function build(){
     var root=document.getElementById('lists');
@@ -151,17 +157,18 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
       var row=document.createElement('div');row.className='add';
       var inp=document.createElement('input');inp.type='text';inp.maxLength=80;inp.placeholder='Ένα δώρο…';inp.setAttribute('aria-label','Νέο δώρο για '+p.name);
       var btn=document.createElement('button');btn.type='button';btn.textContent='Προσθήκη';
-      row.appendChild(inp);row.appendChild(btn);
+      var lnk=document.createElement('input');lnk.type='text';lnk.className='lnk';lnk.maxLength=300;lnk.placeholder='Λινκ για το δώρο (προαιρετικό)';lnk.setAttribute('aria-label','Λινκ δώρου για '+p.name);
+      row.appendChild(inp);row.appendChild(btn);row.appendChild(lnk);
       box.appendChild(h);box.appendChild(cnt);box.appendChild(ul);box.appendChild(row);
       root.appendChild(box);
-      els[p.id]={cnt:cnt,ul:ul,inp:inp,btn:btn};
+      els[p.id]={cnt:cnt,ul:ul,inp:inp,btn:btn,lnk:lnk};
       function add(){
         var v=inp.value.trim();
         if(!v||items[p.id].length>=MAX)return;
-        items[p.id].push(v);inp.value='';save(p.id);render(p.id);
+        items[p.id].push({t:v,u:cleanUrl(lnk.value)});inp.value='';lnk.value='';save(p.id);render(p.id);
       }
       btn.addEventListener('click',add);
-      inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();add()}});
+      [inp,lnk].forEach(function(el){el.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();add()}})});
     });
   }
 
@@ -170,14 +177,15 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
     e.cnt.textContent=list.length+' / '+MAX+' δώρα';
     e.ul.textContent='';
     if(!list.length){var li=document.createElement('li');li.className='empty';li.textContent='Δεν υπάρχουν δώρα ακόμα.';e.ul.appendChild(li)}
-    list.forEach(function(t,i){
+    list.forEach(function(it,i){var t=it.t;
       var li=document.createElement('li');
-      var s=document.createElement('span');s.textContent=t;
+      var s=document.createElement('div');s.className='it';var tx=document.createElement('span');tx.textContent=t;s.appendChild(tx);
+      if(it.u){var a=document.createElement('a');a.href=it.u;a.target='_blank';a.rel='noopener noreferrer';var hn=it.u;try{hn=new URL(it.u).hostname.replace(/^www\./,'')}catch(e){}a.textContent='🔗 '+hn;s.appendChild(a)}
       var b=document.createElement('button');b.type='button';b.textContent='×';b.setAttribute('aria-label','Αφαίρεση: '+t);
       b.addEventListener('click',function(){items[id].splice(i,1);save(id);render(id)});
       li.appendChild(s);li.appendChild(b);e.ul.appendChild(li);
     });
-    e.inp.disabled=full;e.btn.disabled=full;
+    e.inp.disabled=full;e.btn.disabled=full;e.lnk.disabled=full;
     e.inp.placeholder=full?'Η λίστα είναι γεμάτη':'Ένα δώρο…';
   }
 
@@ -200,7 +208,7 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
           db.doc('wishlist/'+p.id).onSnapshot(function(snap){
             if(!snap.exists)return;
             var v=snap.data()&&snap.data().items;
-            if(Array.isArray(v)){items[p.id]=v.filter(function(t){return typeof t==='string'}).slice(0,MAX);lsSet(p.id);render(p.id)}
+            if(Array.isArray(v)){items[p.id]=norm(v).slice(0,MAX);lsSet(p.id);render(p.id)}
           },function(){});
         });
       }).catch(function(){});
