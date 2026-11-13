@@ -138,7 +138,7 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
 /* Wish lists */
 (function(){
   var MAX=10, db=null;
-  var people=[{id:'danai',name:'Δανάη'},{id:'alexis',name:'Αλέξης'}];
+  var people=[{id:'danai',name:'Δανάης'},{id:'alexis',name:'Αλέξη'}];
   var items={danai:[],alexis:[]}, els={}, chain={danai:Promise.resolve(),alexis:Promise.resolve()};
 
   function lsGet(id){try{var v=JSON.parse(localStorage.getItem('wish_'+id)||'[]');return norm(v)}catch(e){return[]}}
