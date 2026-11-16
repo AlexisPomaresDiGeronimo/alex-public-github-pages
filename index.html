@@ -34,7 +34,8 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
 .letter p:last-child{margin:0;color:var(--gold);font-style:italic}
 .done{display:none;font-size:clamp(28px,7vw,44px);color:var(--ink);font-style:italic;margin:10px 0 30px}
 .wish-title{font-weight:400;font-style:italic;font-size:clamp(26px,6vw,36px);color:var(--gold);margin:52px 0 6px}
-.wish-note{color:var(--muted);font-size:15px;margin:0 0 22px}
+.wish-note{color:var(--muted);font-size:15px;margin:0 0 8px}
+.sync{color:var(--muted);font-size:13px;margin:0 0 22px;min-height:1.2em}
 .lists{display:grid;grid-template-columns:1fr;gap:18px;text-align:left}
 @media (min-width:640px){.lists{grid-template-columns:1fr 1fr}}
 .list{background:var(--card);border:1px solid rgba(232,185,96,.35);border-radius:14px;padding:20px 18px}
@@ -84,6 +85,7 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
 
   <h2 class="wish-title">Οι λίστες των δώρων μας 🎁</h2>
   <p class="wish-note">Μέχρι 10 δώρα ο καθένας. Πρόσθεσε ή σβήσε όποτε θέλεις.</p>
+  <p class="sync" id="sync" role="status"></p>
   <section class="lists" id="lists"></section>
 </main>
 
@@ -91,9 +93,7 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
 (function(){
   function target(){
     var now=new Date(), y=now.getFullYear();
-    var t=new Date(y,11,18,17,55,0);
-    
-    return t;
+    return new Date(y,11,18,17,55,0);
   }
   var T=target();
   function tick(){
@@ -105,7 +105,6 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
       document.getElementById('clock').style.display='none';
       document.getElementById('when').style.display='none';
       document.getElementById('letter').style.display='none';
-
       document.getElementById('santa').style.display='block';
       document.getElementById('h1-after').style.display='block';
       document.getElementById('done').style.display='block';
@@ -137,9 +136,11 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
 
 /* Wish lists */
 (function(){
-  var MAX=10, db=null;
+  var MAX=10, db=null, canWrite=true;
   var people=[{id:'danai',name:'Δανάη'},{id:'alexis',name:'Αλέξης'}];
   var items={danai:[],alexis:[]}, els={}, chain={danai:Promise.resolve(),alexis:Promise.resolve()};
+  var syncEl=document.getElementById('sync');
+  function status(t){syncEl.textContent=t}
 
   function lsGet(id){try{var v=JSON.parse(localStorage.getItem('wish_'+id)||'[]');return norm(v)}catch(e){return[]}}
   function lsSet(id){try{localStorage.setItem('wish_'+id,JSON.stringify(items[id]))}catch(e){}}
@@ -191,28 +192,40 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
 
   function save(id){
     lsSet(id);
-    if(!db)return;
+    if(!db){status('⚠️ Δεν υπάρχει συγχρονισμός: οι αλλαγές μένουν μόνο σε αυτή τη συσκευή.');return}
     var snapshot=items[id].slice();
-    chain[id]=chain[id].then(function(){return db.doc('wishlist/'+id).set({items:snapshot})}).catch(function(){});
+    chain[id]=chain[id].then(function(){return db.doc('wishlist/'+id).set({items:snapshot})}).then(function(){
+      status('✅ Συγχρονίστηκε');
+    }).catch(function(){
+      status('⚠️ Η αλλαγή δεν αποθηκεύτηκε για την άλλη συσκευή (χρειάζεται σύνδεση και δικαίωμα επεξεργασίας).');
+    });
   }
 
   build();
   people.forEach(function(p){items[p.id]=lsGet(p.id).slice(0,MAX);render(p.id)});
+  status('Συνδέεται ο συγχρονισμός…');
+
+  var timer=setTimeout(function(){if(!db)status('⚠️ Δεν υπάρχει συγχρονισμός: οι αλλαγές μένουν μόνο σε αυτή τη συσκευή.')},10000);
 
   try{
     if(window.claude&&claude.use){
       claude.use('db').then(function(d){
-        if(!d)return;
-        db=d;
+        clearTimeout(timer);
+        if(!d){status('⚠️ Δεν υπάρχει συγχρονισμός: συνδέσου στο claude.ai και άνοιξε το λινκ ξανά.');return}
+        db=d;status('✅ Συγχρονισμός ενεργός');
         people.forEach(function(p){
           db.doc('wishlist/'+p.id).onSnapshot(function(snap){
-            if(!snap.exists)return;
+            if(!snap.exists){
+              /* nothing stored yet: upload what this device already has */
+              if(items[p.id].length&&!snap.fromCache)save(p.id);
+              return;
+            }
             var v=snap.data()&&snap.data().items;
             if(Array.isArray(v)){items[p.id]=norm(v).slice(0,MAX);lsSet(p.id);render(p.id)}
-          },function(){});
+          },function(){status('⚠️ Ο συγχρονισμός διακόπηκε.')});
         });
-      }).catch(function(){});
-    }
+      }).catch(function(){status('⚠️ Δεν υπάρχει συγχρονισμός.')});
+    }else{status('⚠️ Δεν υπάρχει συγχρονισμός: οι αλλαγές μένουν μόνο σε αυτή τη συσκευή.')}
   }catch(e){}
 })();
 </script>
