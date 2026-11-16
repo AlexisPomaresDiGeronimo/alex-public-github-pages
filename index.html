@@ -134,19 +134,22 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
   draw();
 })();
 
-/* Wish lists */
+/* Wish lists – synced through Firebase Realtime Database (REST) */
 (function(){
-  var MAX=10, db=null, canWrite=true;
+  var DB_URL='https://alex-github-pages-default-rtdb.europe-west1.firebasedatabase.app/';
+  var MAX=10, POLL_MS=4000;
   var people=[{id:'danai',name:'Δανάη'},{id:'alexis',name:'Αλέξης'}];
-  var items={danai:[],alexis:[]}, els={}, chain={danai:Promise.resolve(),alexis:Promise.resolve()};
+  var items={danai:[],alexis:[]}, els={}, pending={danai:0,alexis:0};
   var syncEl=document.getElementById('sync');
   function status(t){syncEl.textContent=t}
 
-  function lsGet(id){try{var v=JSON.parse(localStorage.getItem('wish_'+id)||'[]');return norm(v)}catch(e){return[]}}
+  function lsGet(id){try{return norm(JSON.parse(localStorage.getItem('wish_'+id)||'[]'))}catch(e){return[]}}
   function lsSet(id){try{localStorage.setItem('wish_'+id,JSON.stringify(items[id]))}catch(e){}}
-
   function cleanUrl(u){u=String(u||'').trim();if(!u)return'';if(!/^https?:\/\//i.test(u))u='https://'+u;try{var p=new URL(u);return /^https?:$/.test(p.protocol)?p.href:''}catch(e){return''}}
-  function norm(v){return Array.isArray(v)?v.map(function(i){if(typeof i==='string')return{t:i,u:''};if(i&&typeof i.t==='string')return{t:i.t,u:cleanUrl(i.u||'')};return null}).filter(Boolean):[]}
+  function norm(v){
+    if(v&&!Array.isArray(v)&&typeof v==='object')v=Object.keys(v).sort(function(a,b){return a-b}).map(function(k){return v[k]});
+    return Array.isArray(v)?v.map(function(i){if(typeof i==='string')return{t:i,u:''};if(i&&typeof i.t==='string')return{t:i.t,u:cleanUrl(i.u||'')};return null}).filter(Boolean):[];
+  }
 
   function build(){
     var root=document.getElementById('lists');
@@ -192,41 +195,39 @@ h1{font-weight:400;font-style:italic;font-size:clamp(34px,8vw,56px);margin:0 0 1
 
   function save(id){
     lsSet(id);
-    if(!db){status('⚠️ Δεν υπάρχει συγχρονισμός: οι αλλαγές μένουν μόνο σε αυτή τη συσκευή.');return}
-    var snapshot=items[id].slice();
-    chain[id]=chain[id].then(function(){return db.doc('wishlist/'+id).set({items:snapshot})}).then(function(){
-      status('✅ Συγχρονίστηκε');
-    }).catch(function(){
-      status('⚠️ Η αλλαγή δεν αποθηκεύτηκε για την άλλη συσκευή (χρειάζεται σύνδεση και δικαίωμα επεξεργασίας).');
-    });
+    if(!DB_URL){status('⚠️ Δεν υπάρχει συγχρονισμός: λείπει το DB_URL.');return}
+    var seq=++pending[id];
+    fetch(DB_URL+'/wishlist/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(items[id])})
+      .then(function(r){if(!r.ok)throw 0;status('✅ Συγχρονίστηκε')})
+      .catch(function(){status('⚠️ Η αλλαγή δεν αποθηκεύτηκε online. Έλεγξε τα rules της βάσης.')})
+      .then(function(){if(pending[id]===seq)pending[id]=0});
+  }
+
+  function poll(){
+    fetch(DB_URL+'/wishlist.json',{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(data){
+      data=data||{};
+      people.forEach(function(p){
+        if(pending[p.id])return; /* our own save is in flight */
+        var remote=norm(data[p.id]).slice(0,MAX);
+        if(data[p.id]===undefined){ /* nothing online yet: upload what this device has */
+          if(items[p.id].length)save(p.id);
+          return;
+        }
+        if(JSON.stringify(remote)!==JSON.stringify(items[p.id])){
+          var focused=document.activeElement===els[p.id].inp||document.activeElement===els[p.id].lnk;
+          items[p.id]=remote;lsSet(p.id);
+          if(!focused)render(p.id);else{render(p.id)}
+        }
+      });
+      status('✅ Συγχρονισμός ενεργός');
+    }).catch(function(){status('⚠️ Δεν υπάρχει σύνδεση με τη βάση.')});
   }
 
   build();
   people.forEach(function(p){items[p.id]=lsGet(p.id).slice(0,MAX);render(p.id)});
-  status('Συνδέεται ο συγχρονισμός…');
-
-  var timer=setTimeout(function(){if(!db)status('⚠️ Δεν υπάρχει συγχρονισμός: οι αλλαγές μένουν μόνο σε αυτή τη συσκευή.')},10000);
-
-  try{
-    if(window.claude&&claude.use){
-      claude.use('db').then(function(d){
-        clearTimeout(timer);
-        if(!d){status('⚠️ Δεν υπάρχει συγχρονισμός: συνδέσου στο claude.ai και άνοιξε το λινκ ξανά.');return}
-        db=d;status('✅ Συγχρονισμός ενεργός');
-        people.forEach(function(p){
-          db.doc('wishlist/'+p.id).onSnapshot(function(snap){
-            if(!snap.exists){
-              /* nothing stored yet: upload what this device already has */
-              if(items[p.id].length&&!snap.fromCache)save(p.id);
-              return;
-            }
-            var v=snap.data()&&snap.data().items;
-            if(Array.isArray(v)){items[p.id]=norm(v).slice(0,MAX);lsSet(p.id);render(p.id)}
-          },function(){status('⚠️ Ο συγχρονισμός διακόπηκε.')});
-        });
-      }).catch(function(){status('⚠️ Δεν υπάρχει συγχρονισμός.')});
-    }else{status('⚠️ Δεν υπάρχει συγχρονισμός: οι αλλαγές μένουν μόνο σε αυτή τη συσκευή.')}
-  }catch(e){}
+  if(!DB_URL){status('⚠️ Δεν υπάρχει συγχρονισμός: λείπει το DB_URL.')}
+  else{status('Συνδέεται ο συγχρονισμός…');poll();setInterval(poll,POLL_MS);
+    document.addEventListener('visibilitychange',function(){if(!document.hidden)poll()});}
 })();
 </script>
 </body>
